@@ -14,13 +14,14 @@ namespace :sentry do
       require 'net/https'
       require 'json'
 
-      version = `git rev-parse HEAD`.strip
+      version = fetch(:version) || `git rev-parse HEAD`.strip
 
       sentry_host = ENV['SENTRY_HOST'] || fetch(:sentry_host, 'https://sentry.io')
       orga_slug = fetch(:sentry_organization) || fetch(:application)
       project = fetch(:sentry_project) || fetch(:application)
       environment = fetch(:stage) || 'default'
       api_token = ENV['SENTRY_API_TOKEN'] || fetch(:sentry_api_token)
+      repo_integration_required = fetch(:repo_integration_required, false)
       repo_name = fetch(:sentry_repo) || fetch(:repo_url).split(':').last.gsub(/\.git$/, '')
 
       uri = URI.parse(sentry_host)
@@ -34,12 +35,14 @@ namespace :sentry do
 
       req = Net::HTTP::Post.new("/api/0/organizations/#{orga_slug}/releases/", headers)
       req.body = JSON.generate(
-        version: version,
-        refs: [{
-          repository: repo_name,
-          commit: fetch(:current_revision) || `git rev-parse HEAD`.strip
-        }],
-        projects: [project]
+        {
+          version: version,
+          refs: [{
+            repository: repo_name,
+            commit: fetch(:current_revision) || `git rev-parse HEAD`.strip
+          }],
+          projects: [project]
+        }.tap { |hash| hash.delete(:refs) unless repo_integration_required }
       )
       response = http.request(req)
       if response.is_a? Net::HTTPSuccess
