@@ -6,6 +6,8 @@
 
 # For Rails app, this goes in config/deploy.rb
 
+require 'rake'
+
 namespace :sentry do
   desc 'Notice new deployment in Sentry'
   task :notice_deployment do
@@ -14,15 +16,12 @@ namespace :sentry do
       require 'net/https'
       require 'json'
 
-      version = `git rev-parse HEAD`.strip
-
+      version = fetch(:version) || `git rev-parse HEAD`.strip
       sentry_host = ENV['SENTRY_HOST'] || fetch(:sentry_host, 'https://sentry.io')
       orga_slug = fetch(:sentry_organization) || fetch(:application)
       project = fetch(:sentry_project) || fetch(:application)
       environment = fetch(:stage) || 'default'
       api_token = ENV['SENTRY_API_TOKEN'] || fetch(:sentry_api_token)
-      repo_name = fetch(:sentry_repo) || fetch(:repo_url).split(':').last.gsub(/\.git$/, '')
-
       uri = URI.parse(sentry_host)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
@@ -33,14 +32,7 @@ namespace :sentry do
       }
 
       req = Net::HTTP::Post.new("/api/0/organizations/#{orga_slug}/releases/", headers)
-      req.body = JSON.generate(
-        version: version,
-        refs: [{
-          repository: repo_name,
-          commit: fetch(:current_revision) || `git rev-parse HEAD`.strip
-        }],
-        projects: [project]
-      )
+      req.body = JSON.generate(version: version, projects: [project])
       response = http.request(req)
       if response.is_a? Net::HTTPSuccess
         info 'Uploaded release infos to Sentry'
